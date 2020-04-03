@@ -401,6 +401,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         logger.info("Migrated " + nChannels + " channel(s) to the new Selector.");
     }
 
+    //在这里从队里面取任务
     @Override
     protected void run() {
         for (;;) {

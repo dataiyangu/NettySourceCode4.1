@@ -18,11 +18,12 @@ package io.netty.channel;
 import io.netty.util.concurrent.EventExecutor;
 
 final class DefaultChannelHandlerContext extends AbstractChannelHandlerContext {
-
+    //DefaultChannelHandlerContext有handler属性
     private final ChannelHandler handler;
 
     DefaultChannelHandlerContext(
             DefaultChannelPipeline pipeline, EventExecutor executor, String name, ChannelHandler handler) {
+        //这里面有两个方法isInbound  、isOutbound
         super(pipeline, executor, name, isInbound(handler), isOutbound(handler));
         if (handler == null) {
             throw new NullPointerException("handler");
@@ -34,7 +35,7 @@ final class DefaultChannelHandlerContext extends AbstractChannelHandlerContext {
     public ChannelHandler handler() {
         return handler;
     }
-
+    //实现了inboundHandler isInbound就是true  下面类似
     private static boolean isInbound(ChannelHandler handler) {
         return handler instanceof ChannelInboundHandler;
     }

@@ -135,13 +135,17 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     @Override
     public ChannelHandlerContext fireChannelRegistered() {
+        //findContextInbound   从头结点开始往后，找到第一个属性 inbound 为 true 的 ChannelHandlerContext 实例
         invokeChannelRegistered(findContextInbound());
         return this;
     }
 
+    //从 head 开始遍历 Pipeline 的双向链表，然后找到第一个属性 inbound 为 true 的
+    // ChannelHandlerContext 实例
     static void invokeChannelRegistered(final AbstractChannelHandlerContext next) {
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
+            //调用invokeChannelRegistered
             next.invokeChannelRegistered();
         } else {
             executor.execute(new Runnable() {
@@ -156,6 +160,8 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private void invokeChannelRegistered() {
         if (invokeHandler()) {
             try {
+                //handler 就是我们的ChannelInitail
+                //接着调用channelRegistered
                 ((ChannelInboundHandler) handler()).channelRegistered(this);
             } catch (Throwable t) {
                 notifyHandlerException(t);
@@ -207,6 +213,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     static void invokeChannelActive(final AbstractChannelHandlerContext next) {
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
+            //进入
             next.invokeChannelActive();
         } else {
             executor.execute(new Runnable() {
@@ -219,13 +226,22 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     private void invokeChannelActive() {
+        //用户有没有重写handler
         if (invokeHandler()) {
             try {
+                //重写的话调用重写的
                 ((ChannelInboundHandler) handler()).channelActive(this);
             } catch (Throwable t) {
                 notifyHandlerException(t);
             }
         } else {
+            //没有重写的话调用fireChannelActive
+
+            //在 ChannelInboundHandlerAdapter 的 channelActive()中，仅仅调用了 ctx.fireChannelActive()方法，因此就
+            // 会进入 Context.fireChannelActive() -> Connect.findContextInbound() -> nextContext.invokeChannelActive() ->
+            // nextHandler.channelActive() -> nextContext.fireChannelActive()这样的循环中。同理，tail 本身既实现了
+            // ChannelInboundHandler 接口，又实现了 ChannelHandlerContext 接口，因此当 channelActive()消息传递到 tail 后，
+            // 会将消息转递到对应的 ChannelHandler 中处理，而 tail 的 handler()返回的就是 tail 本身：
             fireChannelActive();
         }
     }
@@ -535,7 +551,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
             return promise;
         }
 
-        //往前找到第一个outbound为true的，就是head结点
+        //往前找到第一个outbound为true的
+        //以当前 Context 为起点，向 Pipeline 中的 Context 双向链表的前端
+        // 寻找第一个 outbound 属性为 true 的 Context（即关联 ChannelOutboundHandler 的 Context），然后返回。
         final AbstractChannelHandlerContext next = findContextOutbound();
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
@@ -545,6 +563,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
                 @Override
                 public void run() {
                     //因为是next.invokeConnect，所以进入的是headContext的方法
+
                     next.invokeConnect(remoteAddress, localAddress, promise);
                 }
             }, promise, null);
@@ -553,6 +572,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     private void invokeConnect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
+        //用户是否重写connect
         if (invokeHandler()) {
             try {
                 //进入HeadContext
@@ -561,6 +581,14 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
                 notifyOutboundHandlerException(t, promise);
             }
         } else {
+            //如果用户没有重写 ChannelHandler 的 connect()方法，那么会调用 ChannelOutboundHandlerAdapter 的 connect()
+            // 实现：
+
+            //而这个调用又回到了：
+            // Context.connect -> Connect.findContextOutbound -> next.invokeConnect -> handler.connect -> Context.connect
+            // 这样的循环中，直到 connect 事件传递到 DefaultChannelPipeline 的双向链表的头节点，即 head 中
+
+            //因此最终 connect()事件是在 head 中被处理。 headContext
             connect(remoteAddress, localAddress, promise);
         }
     }

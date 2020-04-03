@@ -251,8 +251,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 }
 
                 boolean wasActive = isActive();
-                //找到了doConnect
+                //找到了doConnect，进行实际的socket
                 if (doConnect(remoteAddress, localAddress)) {
+                    //连接上之后，进入
+                    //  fulfill陆行 Promise允诺
                     fulfillConnectPromise(promise, wasActive);
                 } else {
                     connectPromise = promise;
@@ -309,6 +311,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             // Regardless if the connection attempt was cancelled, channelActive() event should be triggered,
             // because what happened is what happened.
             if (!wasActive && active) {
+                //这里
+                //通过调用 pipeline().fireChannelActive()方法将通道激活的消息(即 Socket 连
+                // 接成功)发送出去。而这里，当调用 pipeline.fireXXX 后，就是 Inbound 事件的起点。因此当调用
+                // pipeline().fireChannelActive()后，就产生了一个 ChannelActive Inbound 事件
                 pipeline().fireChannelActive();
             }
 

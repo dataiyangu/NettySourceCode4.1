@@ -50,6 +50,8 @@ import java.util.concurrent.ConcurrentMap;
  * @param <C>   A sub-type of {@link Channel}
  */
 @Sharable
+//ChannelInitializer他本身就是ChannelInboundHandler
+//在Bootstrap的init方法中添加到ChannelPipeline
 public abstract class ChannelInitializer<C extends Channel> extends ChannelInboundHandlerAdapter {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ChannelInitializer.class);
@@ -73,6 +75,8 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
     public final void channelRegistered(ChannelHandlerContext ctx) throws Exception {
         // Normally this method will never be called as handlerAdded(...) should call initChannel(...) and remove
         // the handler.
+        //在这里就插入了initChannel这个方法了。
+        //因此调用这个方法之后，就将我们自定义的ChannelHandler插入到了pipline
         if (initChannel(ctx)) {
             // we called initChannel(...) so we need to call now pipeline.fireChannelRegistered() to ensure we not
             // miss an event.
@@ -116,6 +120,7 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
                 // We do so to prevent multiple calls to initChannel(...).
                 exceptionCaught(ctx, cause);
             } finally {
+                //finally中删除了ctx这个节点
                 remove(ctx);
             }
             return true;

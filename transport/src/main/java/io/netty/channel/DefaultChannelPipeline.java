@@ -85,14 +85,22 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private boolean registered;
 
     protected DefaultChannelPipeline(Channel channel) {
+        //保存之前与之关联的channel
         this.channel = ObjectUtil.checkNotNull(channel, "channel");
         succeededFuture = new SucceededChannelFuture(channel, null);
         voidPromise =  new VoidChannelPromise(channel, true);
 
+        //就是维护了一个AbstractChannelHandlerContext为节点的双向链表
+
         //一个头结点，一个尾结点。
+        //他们有Context和Handler的双重属性
+
+        //tail是InBoundHandler header是OutBoundHandler
+
         tail = new TailContext(this);
+        //进构造方法看看
         head = new HeadContext(this);
-        
+        //相互指向形成链表
         head.next = tail;
         tail.prev = head;
     }
@@ -194,13 +202,16 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     @Override
+    //第二个参数是handler的名字
     public final ChannelPipeline addLast(EventExecutorGroup group, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
+            //检查新添加的handler的名字是否与已添加的handler的名字重复。 重复的话抛出异常
             checkMultiplicity(handler);
-
+            //将handler包装成AbstractChannelHandlerContext
+            //filterName()设置handler名字
             newCtx = newContext(group, filterName(name, handler), handler);
-
+            //总结：往tail的前面放
             addLast0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventloop yet.
@@ -228,6 +239,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    //总结：往tail的前面方法
     private void addLast0(AbstractChannelHandlerContext newCtx) {
         AbstractChannelHandlerContext prev = tail.prev;
         newCtx.prev = prev;
@@ -289,6 +301,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     private String filterName(String name, ChannelHandler handler) {
         if (name == null) {
+            //handler名字为null
             return generateName(handler);
         }
         checkDuplicateName(name);
@@ -390,6 +403,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             if (h == null) {
                 break;
             }
+            //名字为null，接着往下看
             addLast(executor, null, h);
         }
 
@@ -401,6 +415,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         Class<?> handlerType = handler.getClass();
         String name = cache.get(handlerType);
         if (name == null) {
+            //进入这里
             name = generateName0(handlerType);
             cache.put(handlerType, name);
         }
@@ -421,6 +436,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     private static String generateName0(Class<?> handlerType) {
+        //handler的名字    就是Handler的SimpleName+#0
         return StringUtil.simpleClassName(handlerType) + "#0";
     }
 
@@ -900,6 +916,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     public final ChannelPipeline fireChannelActive() {
+        //进入这里
         AbstractChannelHandlerContext.invokeChannelActive(head);
         return this;
     }
@@ -947,6 +964,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     public final ChannelFuture connect(SocketAddress remoteAddress) {
+        //可以看到outBound时间（这了是connect时间）传递到pipeline后，它其实是以tail为起点进行传播的。
         return tail.connect(remoteAddress);
     }
 
@@ -1175,6 +1193,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     final class TailContext extends AbstractChannelHandlerContext implements ChannelInboundHandler {
 
         TailContext(DefaultChannelPipeline pipeline) {
+            //inbound是true  outBound是false
             super(pipeline, null, TAIL_NAME, true, false);
             setAddComplete();
         }
@@ -1191,6 +1210,8 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         public void channelUnregistered(ChannelHandlerContext ctx) throws Exception { }
 
         @Override
+        //channelActive方法
+        // 如果是 Inbound,当用户没有实现自定义的处理器时，那么默认是不处理的
         public void channelActive(ChannelHandlerContext ctx) throws Exception { }
 
         @Override
@@ -1232,11 +1253,13 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         private final Unsafe unsafe;
 
         HeadContext(DefaultChannelPipeline pipeline) {
+            //inbound false    inbound true
             super(pipeline, null, HEAD_NAME, false, true);
             unsafe = pipeline.channel().unsafe();
             setAddComplete();
         }
 
+        //
         @Override
         public ChannelHandler handler() {
             return this;

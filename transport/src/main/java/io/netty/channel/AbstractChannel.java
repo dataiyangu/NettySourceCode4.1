@@ -465,17 +465,21 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         new IllegalStateException("incompatible event loop type: " + eventLoop.getClass().getName()));
                 return;
             }
-
+            //就是在这里进行关联的。
             AbstractChannel.this.eventLoop = eventLoop;
 
             if (eventLoop.inEventLoop()) {
                 //register0
                 register0(promise);
             } else {
+                //一路从 Bootstrap 的 bind()方法跟踪到 AbstractChannel$AbstractUnsafe 的 register()方法，整个代码都是在
+                // 主线程中运行的，因此上面的 eventLoop.inEventLoop()返回为 false，于是进入到 else 分支，在这个分支中调用了
+                // eventLoop.execute()方法
                 try {
                     eventLoop.execute(new Runnable() {
                         @Override
                         public void run() {
+                            //在这里进行注册
                             register0(promise);
                         }
                     });
@@ -508,6 +512,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 pipeline.invokeHandlerAddedIfNeeded();
 
                 safeSetSuccess(promise);
+                //激活pipeline事件
                 pipeline.fireChannelRegistered();
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.

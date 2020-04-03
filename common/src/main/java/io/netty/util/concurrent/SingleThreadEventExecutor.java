@@ -172,10 +172,13 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     protected SingleThreadEventExecutor(EventExecutorGroup parent, Executor executor,
                                         boolean addTaskWakesUp, int maxPendingTasks,
                                         RejectedExecutionHandler rejectedHandler) {
+        //EventExecutorGroup
         super(parent);
+        //false
         this.addTaskWakesUp = addTaskWakesUp;
         this.maxPendingTasks = Math.max(16, maxPendingTasks);
         this.executor = ObjectUtil.checkNotNull(executor, "executor");
+        //
         taskQueue = newTaskQueue(this.maxPendingTasks);
         rejectedExecutionHandler = ObjectUtil.checkNotNull(rejectedHandler, "rejectedHandler");
     }
@@ -747,6 +750,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         return isTerminated();
     }
 
+    //NioEventLoop中的Execute方法想任务队列中添加task，并由NioEventLoop进行调度执行
     @Override
     public void execute(Runnable task) {
         if (task == null) {
@@ -755,9 +759,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
         boolean inEventLoop = inEventLoop();
         if (inEventLoop) {
+            //是在eventLoop中的就直接添加到队列中
             addTask(task);
         } else {
+            //启动线程
             startThread();
+            //添加到队列
             addTask(task);
             if (isShutdown() && removeTask(task)) {
                 reject();
@@ -857,8 +864,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         }
     }
 
+    //SingleThreadEventExecutor 启动时会调用 doStartThread()方法，然后调用 executor.execute()
+    // 方法，将当前线程赋值给 thread。
     private void doStartThread() {
         assert thread == null;
+        //可以看到这里面新建了一个线程，这个线程即使本地线程，就是对于EventLoop本身自己的线程。
+        //注意EventLoop里面的线程是通过queue进行执行的。
         executor.execute(new Runnable() {
             @Override
             public void run() {
@@ -870,6 +881,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 boolean success = false;
                 updateLastExecutionTime();
                 try {
+                    //主要就是执行这里的run，而NioEvenLoop实现了这个方法，根据多态，最后启动调用的其实是NioEventLoop中run方法
                     SingleThreadEventExecutor.this.run();
                     success = true;
                 } catch (Throwable t) {
