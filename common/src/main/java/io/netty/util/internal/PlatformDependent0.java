@@ -309,6 +309,8 @@ final class PlatformDependent0 {
     }
 
     static long directBufferAddress(ByteBuffer buffer) {
+        //Native方法   它是直接通过 buffer 的内存地址加上一个
+        // 偏移量去取数据
         return getLong(buffer, ADDRESS_FIELD_OFFSET);
     }
 

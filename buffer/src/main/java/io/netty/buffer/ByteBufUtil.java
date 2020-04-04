@@ -64,18 +64,26 @@ public final class ByteBufUtil {
     private static final int MAX_BYTES_PER_CHAR_UTF8 =
             (int) CharsetUtil.encoder(CharsetUtil.UTF_8).maxBytesPerChar();
 
+    //我们看到这里又调用了 ByteBufUtil 的静态属性 DEFAULT_ALLOCATOR, 再跟进去：
+    // DEFAULT_ALLOCATOR 这个属性是在 static 块中初始化的，我们跟到 static 块中：
     static final ByteBufAllocator DEFAULT_ALLOCATOR;
 
+    //首先判断运行环境是不是安卓, 如果不是安卓, 在返回"pooled"字符串保存在 allocType 中，然后通过 if 判断, 最后局部
+    //变量 alloc = PooledByteBufAllocator.DEFAULT, 最后将 alloc 赋值到成员变量 DEFAULT_ALLOCATOR，我们跟到
+    // PooledByteBufAllocator 的 DEFAULT 属性中：
     static {
         String allocType = SystemPropertyUtil.get(
+                //首先判断运行环境是不是安卓, 如果不是安卓, 在返回"pooled"字符串保存在 allocType 中
                 "io.netty.allocator.type", PlatformDependent.isAndroid() ? "unpooled" : "pooled");
         allocType = allocType.toLowerCase(Locale.US).trim();
 
         ByteBufAllocator alloc;
         if ("unpooled".equals(allocType)) {
+
             alloc = UnpooledByteBufAllocator.DEFAULT;
             logger.debug("-Dio.netty.allocator.type: {}", allocType);
         } else if ("pooled".equals(allocType)) {
+            //变量 alloc = PooledByteBufAllocator.DEFAULT,
             alloc = PooledByteBufAllocator.DEFAULT;
             logger.debug("-Dio.netty.allocator.type: {}", allocType);
         } else {

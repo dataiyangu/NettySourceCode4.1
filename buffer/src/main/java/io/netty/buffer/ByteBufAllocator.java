@@ -21,6 +21,7 @@ package io.netty.buffer;
  */
 public interface ByteBufAllocator {
 
+    // 这里调用 ByteBufAllocator 的属性 DEFAULT, 跟进去
     ByteBufAllocator DEFAULT = ByteBufUtil.DEFAULT_ALLOCATOR;
 
     /**

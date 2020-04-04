@@ -361,9 +361,25 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     }
 
     @Override
+    //首 先 拿 到 绑 定 在 channel 中 的 handler, 因 为 我 们 已 经 创 建 了 handle, 所 以 这 里 会 直 接 拿 到 。 再 看
+    // allocHandle.attemptedBytesRead(byteBuf.writableBytes())这步, byteBuf.writableBytes()返回 byteBuf 的可写字节数,
+    // 也就是最多能从 channel 中读取多少字节写到 ByteBuf, allocate 的 attemptedBytesRead 会把可写字节数设置到
+    // DefaultMaxMessagesRecvByteBufAllocator 类 的 attemptedBytesRead 属 性 中 ， 跟 到
+    // DefaultMaxMessagesRecvByteBufAllocator 中的 attemptedBytesRead 我们会看到：
     protected int doReadBytes(ByteBuf byteBuf) throws Exception {
+        // 先 拿 到 绑 定 在 channel 中 的 handler, 因 为 我 们 已 经 创 建 了 handle, 所 以 这 里 会 直 接 拿 到 。
         final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
+        //allocHandle.attemptedBytesRead(byteBuf.writableBytes())这步, byteBuf.writableBytes()返回 byteBuf 的可写字节数,
+        //也就是最多能从 channel 中读取多少字节写到 ByteBuf, allocate 的 attemptedBytesRead 会把可写字节数设置到
+        //DefaultMaxMessagesRecvByteBufAllocator 类 的 attemptedBytesRead 属 性 中 ， 跟 到
+        // DefaultMaxMessagesRecvByteBufAllocator 中的 attemptedBytesRead 我们会看到：
         allocHandle.attemptedBytesRead(byteBuf.writableBytes());
+
+        //继续看 doReadBytes()方法。往下看最后, 通过 byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead())
+        // 将 jdk 底层的 channel 中的数据写入到我们创建的 ByteBuf 中, 并返回实际写入的字节数。回到 NioByteUnsafe 的 read()
+        // 方法中继续看 allocHandle.lastBytesRead(doReadBytes(byteBuf))这步，刚才我们剖析过 doReadBytes(byteBuf)返回的
+        // 是 世界 写 入 ByteBuf 的 字节 数 ， 再 看 lastBytesRead() 方 法, 跟 到 DefaultMaxMessagesRecvByteBufAllocator 的
+        // lastBytesRead()方法中：
         return byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead());
     }
 

@@ -36,9 +36,11 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
 
     private static final int DEFAULT_PAGE_SIZE;
     private static final int DEFAULT_MAX_ORDER; // 8192 << 11 = 16 MiB per chunk
+    //三种规格的大小
     private static final int DEFAULT_TINY_CACHE_SIZE;
     private static final int DEFAULT_SMALL_CACHE_SIZE;
     private static final int DEFAULT_NORMAL_CACHE_SIZE;
+
     private static final int DEFAULT_MAX_CACHED_BUFFER_CAPACITY;
     private static final int DEFAULT_CACHE_TRIM_INTERVAL;
 
@@ -76,10 +78,14 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         // See https://github.com/netty/netty/issues/3888
         final int defaultMinNumArena = runtime.availableProcessors() * 2;
         final int defaultChunkSize = DEFAULT_PAGE_SIZE << DEFAULT_MAX_ORDER;
+        //到了这里
+        //到 这里 为 止 ，我 们 才 知道 nHeapArena 和 nDirectArena 的 默认 赋 值 。默 认 是 分配 CPU 核 数*2 ， 也就 是 把
+        // defaultMinNumArena 的值赋值给 nHeapArena 和 nDirectArena。
         DEFAULT_NUM_HEAP_ARENA = Math.max(0,
                 SystemPropertyUtil.getInt(
                         "io.netty.allocator.numHeapArenas",
                         (int) Math.min(
+                                //cpu核数*2
                                 defaultMinNumArena,
                                 runtime.maxMemory() / defaultChunkSize / 2 / 3)));
         DEFAULT_NUM_DIRECT_ARENA = Math.max(0,
@@ -126,6 +132,9 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     public static final PooledByteBufAllocator DEFAULT =
+            //我们看到这里直接通过 new 的方式, 创建了一个 PooledByteBufAllocator 对象, 也就是基于申请一块连续内存进行缓
+            // 冲区分配的缓冲区分配器。缓冲区分配器的知识, 我们在前面的章节进行了详细的剖析, 这里就不再赘述。回到
+            // NioByteUnsafe 的 read()方法中：
             new PooledByteBufAllocator(PlatformDependent.directBufferPreferred());
 
     private final PoolArena<byte[]>[] heapArenas;
@@ -141,6 +150,8 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         this(false);
     }
 
+    //nHeapArena 和 nDirectArena 是通过 DEFAULT_NUM_HEAP_ARENA 和 DEFAULT_NUM_DIRECT_ARENA
+    // 这两个常量默认赋值的。再继续跟进常量的定义
     public PooledByteBufAllocator(boolean preferDirect) {
         this(preferDirect, DEFAULT_NUM_HEAP_ARENA, DEFAULT_NUM_DIRECT_ARENA, DEFAULT_PAGE_SIZE, DEFAULT_MAX_ORDER);
     }
@@ -203,6 +214,11 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     @SuppressWarnings("unchecked")
+
+    //调用 newArenaArray()方法给 heapArenas 和
+    // directArenas 赋值了
+
+    //其实就是创建了一个固定大小的 PoolArena 数组，数组大小由传入的参数 nHeapArena 和 nDirectArena 来决定
     private static <T> PoolArena<T>[] newArenaArray(int size) {
         return new PoolArena[size];
     }
@@ -253,12 +269,18 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     @Override
+    //看这个方法 newDirectBuffer
     protected ByteBuf newDirectBuffer(int initialCapacity, int maxCapacity) {
+        //通过 threadCache.get()拿到一个类型为 PoolThreadCache 的 cache 对象，然后，通过 cache 拿
+        // 到 directArena 对象，最终会调用 directArena.allocate()方法分配 ByteBuf。
+
+        //其实是PoolThreadLocalCache
         PoolThreadCache cache = threadCache.get();
         PoolArena<ByteBuffer> directArena = cache.directArena;
 
         ByteBuf buf;
         if (directArena != null) {
+            //进入allocate
             buf = directArena.allocate(cache, initialCapacity, maxCapacity);
         } else {
             if (PlatformDependent.hasUnsafe()) {
@@ -342,11 +364,14 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         threadCache.remove();
     }
 
+    //到这里
     final class PoolThreadLocalCache extends FastThreadLocal<PoolThreadCache> {
 
         @Override
         protected synchronized PoolThreadCache initialValue() {
+            //从 heapArenas 中获得一个使用率最少的 Arena
             final PoolArena<byte[]> heapArena = leastUsedArena(heapArenas);
+            ////从 directArenas 中获得一个使用率最少的 Arena
             final PoolArena<ByteBuffer> directArena = leastUsedArena(directArenas);
 
             return new PoolThreadCache(

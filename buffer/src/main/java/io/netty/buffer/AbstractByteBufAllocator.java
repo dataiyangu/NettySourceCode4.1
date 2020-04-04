@@ -95,6 +95,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf buffer() {
+        //directBuffer
         if (directByDefault) {
             return directBuffer();
         }
@@ -126,8 +127,16 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     @Override
+
+    //这里首先判断是否能获取 jdk 的 unsafe 对象, 默认为 true, 所以会走到 directBuffer(initialCapacity)中, 这里最终会分配
+    // 一个 PooledUnsafeDirectByteBuf 对象, 具体分配流程我们再之前小节做过详细剖析。回到 NioByteUnsafe 的 read()方
+    // 法中，分配完了 ByteBuf 之后, 再看这一步 allocHandle.lastBytesRead(doReadBytes(byteBuf))。
+    // 首先看参数 doReadBytes(byteBuf)方法, 这步是将 channel 中的数据读取到我们刚分配的 ByteBuf 中, 并返回读取到的
+    // 字节数，这里会调用到 NioSocketChannel 的 doReadBytes()方法：
     public ByteBuf ioBuffer(int initialCapacity) {
+        //这里首先判断是否能获取 jdk 的 unsafe 对象, 默认为 true, 所以会走到 directBuffer(initialCapacity)中
         if (PlatformDependent.hasUnsafe()) {
+            //这里最终会分配一个 PooledUnsafeDirectByteBuf 对象, 具体分配流程我们再之前小节做过详细剖析
             return directBuffer(initialCapacity);
         }
         return heapBuffer(initialCapacity);
@@ -157,6 +166,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             return emptyBuf;
         }
         validate(initialCapacity, maxCapacity);
+        //最终调用newHeapBuffer 交给子类实现
         return newHeapBuffer(initialCapacity, maxCapacity);
     }
 
@@ -176,6 +186,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             return emptyBuf;
         }
         validate(initialCapacity, maxCapacity);
+        //交给子类实现
         return newDirectBuffer(initialCapacity, maxCapacity);
     }
 

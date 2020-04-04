@@ -25,6 +25,7 @@ import io.netty.util.concurrent.GenericFutureListener;
  * The default {@link ChannelPromise} implementation.  It is recommended to use {@link Channel#newPromise()} to create
  * a new {@link ChannelPromise} rather than calling the constructor explicitly.
  */
+// DefaultChannelPromise 是 ChannelPromise 的实现类，它是实际运行时的 Promoise 实例。
 public class DefaultChannelPromise extends DefaultPromise<Void> implements ChannelPromise, FlushCheckpoint {
 
     private final Channel channel;

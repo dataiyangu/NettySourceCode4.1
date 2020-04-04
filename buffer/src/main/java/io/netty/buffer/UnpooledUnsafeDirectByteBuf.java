@@ -65,6 +65,7 @@ public class UnpooledUnsafeDirectByteBuf extends AbstractReferenceCountedByteBuf
         }
 
         this.alloc = alloc;
+        //关注setByteBUffer方法
         setByteBuffer(allocateDirect(initialCapacity), false);
     }
 
@@ -130,6 +131,7 @@ public class UnpooledUnsafeDirectByteBuf extends AbstractReferenceCountedByteBuf
             }
         }
         this.buffer = buffer;
+        //进入      获取的 buffer 真实的内存地址   并保存到 memoryAddress 变量中。
         memoryAddress = PlatformDependent.directBufferAddress(buffer);
         tmpNioBuf = null;
         capacity = buffer.remaining();

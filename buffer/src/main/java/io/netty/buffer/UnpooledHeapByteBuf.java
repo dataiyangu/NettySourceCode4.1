@@ -55,7 +55,7 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
     protected UnpooledHeapByteBuf(ByteBufAllocator alloc, byte[] initialArray, int maxCapacity) {
         this(alloc, initialArray, 0, initialArray.length, maxCapacity);
     }
-
+    //到这里
     private UnpooledHeapByteBuf(
             ByteBufAllocator alloc, byte[] initialArray, int readerIndex, int writerIndex, int maxCapacity) {
 
@@ -73,10 +73,13 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
         }
 
         this.alloc = alloc;
+        //到这里
         setArray(initialArray);
+        //到这里
         setIndex(readerIndex, writerIndex);
     }
-
+    //里面的实现也非常简单，就是把默认分配的数组 new byte[initialCapacity]赋值给
+    // 全局变量 array。
     private void setArray(byte[] initialArray) {
         array = initialArray;
         tmpNioBuf = null;
@@ -315,6 +318,7 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
     @Override
     public byte getByte(int index) {
         ensureAccessible();
+        //这类是关键区别看unpolledHeadByteBuf和UnpooledUnsafeByteBuf的区别
         return _getByte(index);
     }
 

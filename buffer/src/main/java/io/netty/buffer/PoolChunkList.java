@@ -78,7 +78,10 @@ final class PoolChunkList<T> implements PoolChunkListMetric {
             // be handled by the PoolChunks that are contained in this PoolChunkList.
             return false;
         }
-
+        //从 head 节点往下遍历
+        //首先会从 head 节点往下遍历：long handle = cur.allocate(normCapacity) 表示对于每个 chunk, 都尝试去分配；
+        //if (handle < 0) 说明没有分配到, 则通过 cur = cur.next 找到下一个节点继续进行分配, 我们讲过 chunk 也是通过双向
+        // 链表进行关联的, 所以对这块逻辑应该不会陌生。
         for (PoolChunk<T> cur = head;;) {
             long handle = cur.allocate(normCapacity);
             if (handle < 0) {
@@ -87,7 +90,11 @@ final class PoolChunkList<T> implements PoolChunkListMetric {
                     return false;
                 }
             } else {
+                //如果 handle 大于 0 说明已经分配到了内存, 则通过 cur.initBuf(buf,
+                // handle, reqCapacity)对 byteBuf 进行初始化
                 cur.initBuf(buf, handle, reqCapacity);
+                //if (cur.usage() >= maxUsage) 代表当前 chunk 的内存使用率大于其最大
+                // 使用率, 则通过 remove(cur)从当前的 chunkList 中移除, 再通过 nextList.add(cur)添加到下一个 chunkList 中
                 if (cur.usage() >= maxUsage) {
                     remove(cur);
                     nextList.add(cur);
@@ -98,6 +105,7 @@ final class PoolChunkList<T> implements PoolChunkListMetric {
     }
 
     boolean free(PoolChunk<T> chunk, long handle) {
+        //chunk.free(handle)的意思是通过 chunk 释放一段连续的内存，再跟到 free()方法中：
         chunk.free(handle);
         if (chunk.usage() < minUsage) {
             remove(chunk);

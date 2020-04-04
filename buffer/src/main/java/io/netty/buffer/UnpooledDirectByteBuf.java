@@ -102,7 +102,9 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
     /**
      * Allocate a new direct {@link ByteBuffer} with the given initialCapacity.
      */
+    //看这个方法
     protected ByteBuffer allocateDirect(int initialCapacity) {
+        //直接通过jdk底层分配一个直接缓冲区
         return ByteBuffer.allocateDirect(initialCapacity);
     }
 
@@ -159,6 +161,7 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
             setByteBuffer(newBuffer);
         } else if (newCapacity < oldCapacity) {
             ByteBuffer oldBuffer = buffer;
+            //分配一个直接缓冲区
             ByteBuffer newBuffer = allocateDirect(newCapacity);
             if (readerIndex < newCapacity) {
                 if (writerIndex > newCapacity) {
@@ -171,6 +174,7 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
             } else {
                 setIndex(newCapacity, newCapacity);
             }
+            //传给setByteBUffer方法进行赋值
             setByteBuffer(newBuffer);
         }
         return this;

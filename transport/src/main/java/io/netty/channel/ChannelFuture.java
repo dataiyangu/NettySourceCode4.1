@@ -162,6 +162,8 @@ import java.util.concurrent.TimeUnit;
  * }
  * </pre>
  */
+
+// 表示一种没有返回值的异步调用，同时和一个 Channel 进行绑定
 public interface ChannelFuture extends Future<Void> {
 
     /**

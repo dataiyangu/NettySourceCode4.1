@@ -22,6 +22,8 @@ import io.netty.util.concurrent.Promise;
 /**
  * Special {@link ChannelFuture} which is writable.
  */
+// ChannelPromise 接口扩展了 Promise 和 ChannelFuture，绑定了 Channel，既可写异步执行结构，又具备了监听者的
+// 功能，是 Netty 实际编程使用的表示异步执行的接
 public interface ChannelPromise extends ChannelFuture, Promise<Void> {
 
     @Override

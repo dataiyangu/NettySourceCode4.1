@@ -23,6 +23,8 @@ import java.util.concurrent.TimeUnit;
  * The result of an asynchronous operation.
  */
 @SuppressWarnings("ClassNameSameAsAncestorName")
+//最主要的改进就是增加了监听器 Listener 接口，通过监听器可以让异步执行更加有效率，
+// 不需要通过 get 来等待异步执行结束，而是通过监听器回调来精确地控制异步执行结束的时间点。
 public interface Future<V> extends java.util.concurrent.Future<V> {
 
     /**

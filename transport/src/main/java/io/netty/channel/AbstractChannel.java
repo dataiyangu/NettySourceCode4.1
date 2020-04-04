@@ -430,6 +430,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @Override
         public RecvByteBufAllocator.Handle recvBufAllocHandle() {
+            ////如果不存在, 则创建一个 handle 的实例
             if (recvHandle == null) {
                 recvHandle = config().getRecvByteBufAllocator().newHandle();
             }

@@ -111,7 +111,9 @@ public abstract class AbstractReferenceCountedByteBuf extends AbstractByteBuf {
             }
 
             if (refCntUpdater.compareAndSet(this, refCnt, refCnt - decrement)) {
+                //判断当前 byteBuf 是否没有被引用了
                 if (refCnt == decrement) {
+                    //如果没有被引用, 则通过 deallocate()方法进行释放
                     deallocate();
                     return true;
                 }

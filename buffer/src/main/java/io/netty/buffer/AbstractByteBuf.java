@@ -41,6 +41,7 @@ import static io.netty.util.internal.MathUtil.isOutOfBounds;
 /**
  * A skeletal implementation of a buffer.
  */
+//在 Netty 中，ByteBuf 的大部分功能是在 AbstractByteBuf 中来实现的，我们可以先进入 AbstractByteBuf 的源码看看：
 public abstract class AbstractByteBuf extends ByteBuf {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractByteBuf.class);
     private static final String PROP_MODE = "io.netty.buffer.bytebuf.checkAccessible";
@@ -56,11 +57,11 @@ public abstract class AbstractByteBuf extends ByteBuf {
     static final ResourceLeakDetector<ByteBuf> leakDetector =
             ResourceLeakDetectorFactory.instance().newResourceLeakDetector(ByteBuf.class);
 
-    int readerIndex;
-    int writerIndex;
-    private int markedReaderIndex;
-    private int markedWriterIndex;
-    private int maxCapacity;
+    int readerIndex;//读指针
+    int writerIndex;//写指针
+    private int markedReaderIndex;//mark 之后的读指针
+    private int markedWriterIndex;//mark 之后的写指针
+    private int maxCapacity;//最大容量
 
     protected AbstractByteBuf(int maxCapacity) {
         if (maxCapacity < 0) {
@@ -130,6 +131,7 @@ public abstract class AbstractByteBuf extends ByteBuf {
                     "readerIndex: %d, writerIndex: %d (expected: 0 <= readerIndex <= writerIndex <= capacity(%d))",
                     readerIndex, writerIndex, capacity()));
         }
+        //进
         setIndex0(readerIndex, writerIndex);
         return this;
     }
@@ -1407,7 +1409,7 @@ public abstract class AbstractByteBuf extends ByteBuf {
             throw new IllegalReferenceCountException(0);
         }
     }
-
+    // 最终在 setIndex0()方法中初始化 readerIndex 和 writerIndex。
     final void setIndex0(int readerIndex, int writerIndex) {
         this.readerIndex = readerIndex;
         this.writerIndex = writerIndex;

@@ -31,13 +31,18 @@ import java.nio.channels.ScatteringByteChannel;
 final class PooledUnsafeDirectByteBuf extends PooledByteBuf<ByteBuffer> {
     private static final Recycler<PooledUnsafeDirectByteBuf> RECYCLER = new Recycler<PooledUnsafeDirectByteBuf>() {
         @Override
+        //newObject  当回收站里面没有可用的 buf 时就会创建一个新的 buf
         protected PooledUnsafeDirectByteBuf newObject(Handle<PooledUnsafeDirectByteBuf> handle) {
             return new PooledUnsafeDirectByteBuf(handle, 0);
         }
     };
 
+    // 顾名思义，我看到首先就是从 RECYCLER（也就是内存回收站）对象的 get()方法拿到一个 buf。从上面的代码片段来
+    // 看，RECYCLER 对象实现了一个 newObject()方法，当回收站里面没有可用的 buf 时就会创建一个新的 buf。因为获取
+    // 到的 buf 可能是回收站里面拿出来的，复用前需要重置。因此，继续往下看就会调用 buf 的 reuse()方法
     static PooledUnsafeDirectByteBuf newInstance(int maxCapacity) {
         PooledUnsafeDirectByteBuf buf = RECYCLER.get();
+        //重置
         buf.reuse(maxCapacity);
         return buf;
     }

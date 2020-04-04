@@ -67,7 +67,7 @@ public class DefaultChannelConfig implements ChannelConfig {
     }
 
     protected final Channel channel;
-
+    // 这里返回的 DefualtChannelConfig 的成员变量, 我们看这个成员变量：
     private volatile ByteBufAllocator allocator = ByteBufAllocator.DEFAULT;
     private volatile RecvByteBufAllocator rcvBufAllocator;
     private volatile MessageSizeEstimator msgSizeEstimator = DEFAULT_MSG_SIZE_ESTIMATOR;

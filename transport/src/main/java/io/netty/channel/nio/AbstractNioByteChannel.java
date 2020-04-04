@@ -103,19 +103,41 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         }
 
         @Override
+        //首先获取 SocketChannel 的 config, pipeline 等相关属性，final ByteBufAllocator allocator = config.getAllocator(); 这
+        // 一步是获取一个 ByteBuf 的内存分配器, 用于分配 ByteBuf。这里会走到 DefaultChannelConfig 的 getAllocator 方法中:
         public final void read() {
+            //首先获取 SocketChannel 的 config, pipeline 等相关属性
             final ChannelConfig config = config();
             final ChannelPipeline pipeline = pipeline();
+
+            //一步是获取一个 ByteBuf 的内存分配器 用于分配 ByteBuf
+            //这里会走到 DefaultChannelConfig 的 getAllocator 方法中:
+
+            //这里 ByteBufAllocator allocator = config.getAllocator()中的 allocator , 就是 PooledByteBufAllocator。
             final ByteBufAllocator allocator = config.getAllocator();
+            //final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle() 是创建一个 handle, 我们之前的章节讲过,
+            //handle 是对 RecvByteBufAllocator 进行实际操作的对象，我们跟进 recvBufAllocHandle
             final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle();
+            //allocHandle.reset(config)是将配置重置,
             allocHandle.reset(config);
 
             ByteBuf byteBuf = null;
             boolean close = false;
             try {
+                //进行 do-while
+                // 循环, 有关循环终止条件 allocHandle.continueReading(), 之前小节也有过详细剖析, 这里也不再赘述
                 do {
+                    //byteBuf = allocHandle.allocate(allocator)
+                    //这一步, 这里传入了刚才创建的 allocate 对象, 也就是
+                    // PooledByteBufAllocator，这里会进入 DefaultMaxMessagesRecvByteBufAllocator 类的 allocate()方法中：
                     byteBuf = allocHandle.allocate(allocator);
+                    //回到 NioByteUnsafe 的 read()方
+                    // 法中，分配完了 ByteBuf 之后, 再看这一步 allocHandle.lastBytesRead(doReadBytes(byteBuf))。
+                    // 首先看参数 doReadBytes(byteBuf)方法, 这步是将 channel 中的数据读取到我们刚分配的 ByteBuf 中, 并返回读取到的
+                    // 字节数，这里会调用到 NioSocketChannel 的 doReadBytes()方法：
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
+                    //如果最后
+                    // 一次读取数据为 0, 说明已经将 channel 中的数据全部读取完毕, 将新创建的 ByteBuf 释放循环利用, 并跳出循环。
                     if (allocHandle.lastBytesRead() <= 0) {
                         // nothing was read. release the buffer.
                         byteBuf.release();
@@ -126,10 +148,14 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
                     allocHandle.incMessagesRead(1);
                     readPending = false;
+                    //读取完毕之后, 会通过 pipeline.fireChannelRead(byteBuf)将传递 channelRead 事件, 有关 channelRead
+                    // 事件, 我们在前面的章节也进行了详细的剖析
                     pipeline.fireChannelRead(byteBuf);
                     byteBuf = null;
                 } while (allocHandle.continueReading());
-
+                //我们知道第一次分配ByteBuf的初始容量是1024, 但是初始容量不一定一定满足所有的业务场景, netty中, 将每次读取
+                // 数据的字节数进行记录, 然后之后次分配 ByteBuf 的时候, 容量会尽可能的符合业务场景所需要大小, 具体实现方式,
+                // 就是在 readComplete()这一步体现的。我们跟到 AdaptiveRecvByteBufAllocator 的 readComplete()方法中：
                 allocHandle.readComplete();
                 pipeline.fireChannelReadComplete();
 

@@ -101,13 +101,38 @@ public class AdaptiveRecvByteBufAllocator extends DefaultMaxMessagesRecvByteBufA
         }
 
         @Override
+        //这里会返回 AdaptiveRecvByteBufAllocator 的成员变量 nextReceiveBufferSize, 也就是下次所分配缓冲区的大小, 根据
+        // 我们之前学习的内容, 第一次分配的时候会分配初始大小, 也就是 1024 字节。这样, alloc.ioBuffer(guess())就会分配一
+        // 个 PooledByteBuf，我们跟到 AbstractByteBufAllocator 的 ioBuffer 方法中
         public int guess() {
             return nextReceiveBufferSize;
         }
 
+        //首先看判断条件 if (actualReadBytes <= SIZE_TABLE[Math.max(0, index - INDEX_DECREMENT - 1)]) 。这里 index 是
+        // 当前分配的缓冲区大小所在的 SIZE_TABLE 中的索引, 将这个索引进行缩进, 然后根据缩进后的所以找出 SIZE_TABLE
+        // 中所存储的内存值, 再判断是否大于等于这次读取的最大字节数, 如果条件成立, 说明分配的内存过大, 需要缩容操作,
+        // 我们看 if 块中缩容相关的逻辑。首先 if (decreaseNow) 会判断是否立刻进行收缩操作, 通常第一次不会进行收缩操作,
+        // 然后会将 decreaseNow 设置为 true, 代表下一次直接进行收缩操作。假设需要立刻进行收缩操作, 我们看收缩操作的
+        // 相关逻辑：
+        // index = Math.max(index - INDEX_DECREMENT, minIndex) 这一步将索引缩进一步, 但不能小于最小索引值；
+        // 然后通过 nextReceiveBufferSize = SIZE_TABLE[index] 获取设置索引之后的内存, 赋值在 nextReceiveBufferSize, 也
+        // 就是下次需要分配的大小, 下次就会根据这个大小分配 ByteBuf 了, 这样就实现了缩容操作。
+        // 再看 else if (actualReadBytes >= nextReceiveBufferSize) ，这里判断这次读取字节的总量比上次分配的大小还要大,
+        //则进行扩容操作。扩容操作也很简单, 索引步进, 然后拿到步进后的索引所对应的内存值, 作为下次所需要分配的大小
+        // 在 NioByteUnsafe 的 read()方法中，经过了缩容或者扩容操作之后, 通过 pipeline.fireChannelReadComplete()传播
+        // ChannelReadComplete()事件，以上就是读取客户端消息的相关流程
         private void record(int actualReadBytes) {
+            ///首先看判断条件 if (actualReadBytes <= SIZE_TABLE[Math.max(0, index - INDEX_DECREMENT - 1)])
+            //这里 index 是当前分配的缓冲区大小所在的 SIZE_TABLE 中的索引, 将这个索引进行缩进, 然后根据缩进后的所以找出 SIZE_TABLE
+            //中所存储的内存值, 再判断是否大于等于这次读取的最大字节数, 如果条件成立, 说明分配的内存过大, 需要缩容操作,
+
             if (actualReadBytes <= SIZE_TABLE[Math.max(0, index - INDEX_DECREMENT - 1)]) {
+                // 我们看 if 块中缩容相关的逻辑。首先 if (decreaseNow) 会判断是否立刻进行收缩操作, 通常第一次不会进行收缩操作,
+                //然后会将 decreaseNow 设置为 true, 代表下一次直接进行收缩操作。假设需要立刻进行收缩操作, 我们看收缩操作的相关逻辑：
                 if (decreaseNow) {
+                    // index = Math.max(index - INDEX_DECREMENT, minIndex) 这一步将索引缩进一步, 但不能小于最小索引值；
+                    // 然后通过 nextReceiveBufferSize = SIZE_TABLE[index] 获取设置索引之后的内存, 赋值在 nextReceiveBufferSize, 也
+                    // 就是下次需要分配的大小, 下次就会根据这个大小分配 ByteBuf 了, 这样就实现了缩容操作。
                     index = Math.max(index - INDEX_DECREMENT, minIndex);
                     nextReceiveBufferSize = SIZE_TABLE[index];
                     decreaseNow = false;
@@ -115,6 +140,10 @@ public class AdaptiveRecvByteBufAllocator extends DefaultMaxMessagesRecvByteBufA
                     decreaseNow = true;
                 }
             } else if (actualReadBytes >= nextReceiveBufferSize) {
+                // 再看 else if (actualReadBytes >= nextReceiveBufferSize) ，这里判断这次读取字节的总量比上次分配的大小还要大,
+                //则进行扩容操作。扩容操作也很简单, 索引步进, 然后拿到步进后的索引所对应的内存值, 作为下次所需要分配的大小
+                // 在 NioByteUnsafe 的 read()方法中，经过了缩容或者扩容操作之后, 通过 pipeline.fireChannelReadComplete()传播
+                // ChannelReadComplete()事件，以上就是读取客户端消息的相关流程
                 index = Math.min(index + INDEX_INCREMENT, maxIndex);
                 nextReceiveBufferSize = SIZE_TABLE[index];
                 decreaseNow = false;
@@ -123,6 +152,7 @@ public class AdaptiveRecvByteBufAllocator extends DefaultMaxMessagesRecvByteBufA
 
         @Override
         public void readComplete() {
+            //这里调用了 record()方法, 并且传入了这一次所读取的字节总数，跟到 record()方法中：
             record(totalBytesRead());
         }
     }

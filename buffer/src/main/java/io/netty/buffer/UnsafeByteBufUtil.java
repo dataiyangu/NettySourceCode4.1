@@ -244,6 +244,7 @@ final class UnsafeByteBufUtil {
     }
 
     static byte getByte(byte[] array, int index) {
+        //Platform平台
         return PlatformDependent.getByte(array, index);
     }
 

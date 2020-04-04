@@ -41,13 +41,17 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
         this.recyclerHandle = (Handle<PooledByteBuf<T>>) recyclerHandle;
     }
 
+    //这里又是我们熟悉的逻辑, 初始化了属性之后, 一个缓冲区分配完成，以上就是 Subpage 级别的缓冲区分配逻辑。
     void init(PoolChunk<T> chunk, long handle, int offset, int length, int maxLength, PoolThreadCache cache) {
+        //初始化
         assert handle >= 0;
         assert chunk != null;
-
+        //在哪一块内存上进行分配的
         this.chunk = chunk;
+        //这一块内存上的哪一块连续内存
         this.handle = handle;
         memory = chunk.memory;
+        //偏移量
         this.offset = offset;
         this.length = length;
         this.maxLength = maxLength;
@@ -70,6 +74,7 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
     /**
      * Method must be called before reuse this {@link PooledByteBufAllocator}
      */
+    //我们发现 reuse()就是对所有的参数重新归为初始状态。
     final void reuse(int maxCapacity) {
         maxCapacity(maxCapacity);
         setRefCnt(1);
@@ -166,9 +171,13 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
     protected final void deallocate() {
         if (handle >= 0) {
             final long handle = this.handle;
+            //表示当前的 ByteBuf 不再指向任何一块内存
             this.handle = -1;
+            //这里将 memory 也设置为 null
             memory = null;
+            //这一步是将 ByteBuf 的内存进行释放
             chunk.arena.free(chunk, handle, maxLength, cache);
+            //将对象放入的对象回收站, 循环利用
             recycle();
         }
     }

@@ -18,6 +18,8 @@ package io.netty.util.concurrent;
 /**
  * Special {@link Future} which is writable.
  */
+//promise允诺
+//    它表示一种可写的 Future，就是可以设置异步执行的结果。
 public interface Promise<V> extends Future<V> {
 
     /**

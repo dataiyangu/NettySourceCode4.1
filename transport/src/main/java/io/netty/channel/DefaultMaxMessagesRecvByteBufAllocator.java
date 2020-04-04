@@ -70,6 +70,7 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
 
         @Override
         public ByteBuf allocate(ByteBufAllocator alloc) {
+            //这里的 guess 方法, 会调用 AdaptiveRecvByteBufAllocator 的 guess 方法：
             return alloc.ioBuffer(guess());
         }
 
@@ -79,10 +80,18 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
         }
 
         @Override
+        //这里会赋值两个属性, lastBytesRead 代表最后读取的字节数, 这里赋值为我们刚才写入 ByteBuf 的字节数,
+        // totalBytesRead 表示总共读取的字节数, 这里将写入的字节数追加。继续来到 NioByteUnsafe 的 read()方法，如果最后
+        // 一次读取数据为 0, 说明已经将 channel 中的数据全部读取完毕, 将新创建的 ByteBuf 释放循环利用, 并跳出循环。
+        // allocHandle.incMessagesRead(1)这步是增加消息的读取次数, 因为我们循环最多 16次, 所以当增加消息次数增加到 16
+        // 会结束循环。读取完毕之后, 会通过 pipeline.fireChannelRead(byteBuf)将传递 channelRead 事件, 有关 channelRead
+        // 事件, 我们在前面的章节也进行了详细的剖析。
         public final void lastBytesRead(int bytes) {
+            //lastBytesRead 代表最后读取的字节数, 这里赋值为我们刚才写入 ByteBuf 的字节数,
             lastBytesRead = bytes;
             // Ignore if bytes is negative, the interface contract states it will be detected externally after call.
             // The value may be "invalid" after this point, but it doesn't matter because reading will be stopped.
+            //totalBytesRead 表示总共读取的字节数, 这里将写入的字节数追加。
             totalBytesRead += bytes;
             if (totalBytesRead < 0) {
                 totalBytesRead = Integer.MAX_VALUE;

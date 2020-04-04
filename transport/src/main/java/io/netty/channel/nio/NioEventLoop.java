@@ -614,9 +614,17 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
     }
 
+    //if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) 这里的判断表示轮询到
+    // 大事件是 OP_READ 或者 OP_ACCEPT 事件。之前我们分析过, 如果当前 NioEventLoop 是 work 线程的话, 那么这里
+    // 就是 OP_READ 事件, 也就是读事件, 表示客户端发来了数据流，这里会调用 unsafe 的 redis()方法进行读取。如果是
+    // work 线 程 , 那 么 这 里 的 channel 是 NioServerSocketChannel, 其 绑 定 的 unsafe 是 NioByteUnsafe, 这 里 会 走 进
+    // NioByteUnsafe 的 read()方法中：
     private void processSelectedKey(SelectionKey k, AbstractNioChannel ch) {
+        //获取到 channel 中的 unsafe
         final AbstractNioChannel.NioUnsafe unsafe = ch.unsafe();
+        //如果这个 key 不是合法的, 说明这个 channel 可能有问题
         if (!k.isValid()) {
+            //代码省略
             final EventLoop eventLoop;
             try {
                 eventLoop = ch.eventLoop();
@@ -639,9 +647,11 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
 
         try {
+            ////如果是合法的, 拿到 key 的 io 事件
             int readyOps = k.readyOps();
             // We first need to call finishConnect() before try to trigger a read(...) or write(...) as otherwise
             // the NIO JDK channel implementation may throw a NotYetConnectedException.
+            //链接事件
             if ((readyOps & SelectionKey.OP_CONNECT) != 0) {
                 // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                 // See https://github.com/netty/netty/issues/924
@@ -651,7 +661,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
                 unsafe.finishConnect();
             }
-
+            //写事件
             // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
             if ((readyOps & SelectionKey.OP_WRITE) != 0) {
                 // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to write
@@ -660,8 +670,19 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
+            //读事件和接受链接事件
+            //如果当前 NioEventLoop 是 work 线程的话, 这里就是 op_read 事件
+            //如果是当前 NioEventLoop 是 boss 线程的话, 这里就是 op_accept 事件
+
+            //if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) 这里的判断表示轮询到
+            // 大事件是 OP_READ 或者 OP_ACCEPT 事件
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
                 //接收连接或去读数据
+
+                //之前我们分析过, 如果当前 NioEventLoop 是 work 线程的话, 那么这里
+                // 就是 OP_READ 事件, 也就是读事件, 表示客户端发来了数据流，这里会调用 unsafe 的 read()方法进行读取。如果是
+                // work 线 程 , 那 么 这 里 的 channel 是 NioServerSocketChannel, 其 绑 定 的 unsafe 是 NioByteUnsafe, 这 里 会 走 进
+                // NioByteUnsafe 的 read()方法中：
                 unsafe.read();
                 if (!ch.isOpen()) {
                     // Connection already closed - no need to handle write.
