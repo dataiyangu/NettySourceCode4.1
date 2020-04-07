@@ -616,7 +616,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
     //if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) 这里的判断表示轮询到
     // 大事件是 OP_READ 或者 OP_ACCEPT 事件。之前我们分析过, 如果当前 NioEventLoop 是 work 线程的话, 那么这里
-    // 就是 OP_READ 事件, 也就是读事件, 表示客户端发来了数据流，这里会调用 unsafe 的 redis()方法进行读取。如果是
+    // 就是 OP_READ 事件, 也就是读事件, 表示客户端发来了数据流，这里会调用 unsafe 的 read ()方法进行读取。如果是
     // work 线 程 , 那 么 这 里 的 channel 是 NioServerSocketChannel, 其 绑 定 的 unsafe 是 NioByteUnsafe, 这 里 会 走 进
     // NioByteUnsafe 的 read()方法中：
     private void processSelectedKey(SelectionKey k, AbstractNioChannel ch) {

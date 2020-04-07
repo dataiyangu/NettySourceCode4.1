@@ -157,7 +157,10 @@ public class LengthFieldPrepender extends MessageToMessageEncoder<ByteBuf> {
     }
 
     @Override
+
     protected void encode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
+        ////首先对长度字段进行设置，如果需要包含消息长度自身，则在原来长度的
+        //     // 基础之上再加上 lengthFieldLength 的长度
         int length = msg.readableBytes() + lengthAdjustment;
         if (lengthIncludesLengthFieldLength) {
             length += lengthFieldLength;
@@ -169,6 +172,8 @@ public class LengthFieldPrepender extends MessageToMessageEncoder<ByteBuf> {
         }
 
         switch (lengthFieldLength) {
+        //    1) 长度字段所占字节为 1：如果使用 1 个 Byte 字节代表消息长度，则最大长度需要小于 256 个字节。对长度进行校验，
+            // 如果校验失败，则抛出参数非法异常；若校验通过，则创建新的 ByteBuf 并通过 writeByte 将长度值写入到 ByteBuf 中；
         case 1:
             if (length >= 256) {
                 throw new IllegalArgumentException(
@@ -176,6 +181,9 @@ public class LengthFieldPrepender extends MessageToMessageEncoder<ByteBuf> {
             }
             out.add(ctx.alloc().buffer(1).order(byteOrder).writeByte((byte) length));
             break;
+        //    2) 长度字段所占字节为 2：如果使用 2 个 Byte 字节代表消息长度，则最大长度需要小于 65536 个字节，对长度进行
+            // 校验，如果校验失败，则抛出参数非法异常；若校验通过，则创建新的 ByteBuf 并通过 writeShort 将长度值写入到 ByteBuf
+            // 中；
         case 2:
             if (length >= 65536) {
                 throw new IllegalArgumentException(
@@ -183,6 +191,9 @@ public class LengthFieldPrepender extends MessageToMessageEncoder<ByteBuf> {
             }
             out.add(ctx.alloc().buffer(2).order(byteOrder).writeShort((short) length));
             break;
+        //    3) 长度字段所占字节为 3：如果使用 3 个 Byte 字节代表消息长度，则最大长度需要小于 16777216 个字节，对长度进
+            // 行校验，如果校验失败，则抛出参数非法异常；若校验通过，则创建新的 ByteBuf 并通过 writeMedium 将长度值写入
+            // 到 ByteBuf 中；
         case 3:
             if (length >= 16777216) {
                 throw new IllegalArgumentException(
@@ -190,12 +201,15 @@ public class LengthFieldPrepender extends MessageToMessageEncoder<ByteBuf> {
             }
             out.add(ctx.alloc().buffer(3).order(byteOrder).writeMedium(length));
             break;
+        //    4) 长度字段所占字节为 4：创建新的 ByteBuf，并通过 writeInt 将长度值写入到 ByteBuf 中；
         case 4:
             out.add(ctx.alloc().buffer(4).order(byteOrder).writeInt(length));
             break;
+        //    5) 长度字段所占字节为 8：创建新的 ByteBuf，并通过 writeLong 将长度值写入到 ByteBuf 中；
         case 8:
             out.add(ctx.alloc().buffer(8).order(byteOrder).writeLong(length));
             break;
+        //    6) 其它长度值：直接抛出 Error。
         default:
             throw new Error("should not reach here");
         }

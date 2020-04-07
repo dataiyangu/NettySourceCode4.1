@@ -789,7 +789,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         @Override
         public final void write(Object msg, ChannelPromise promise) {
             assertEventLoop();
-
+            //负责缓冲写进来的 byteBuf
+            //ChannelOutboundBuffer 的功能就是缓存
+            // 写入的 ByteBuf
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 // If the outboundBuffer is null we know the channel was closed and so
@@ -804,30 +806,44 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             int size;
             try {
+                //非堆外内存转化为堆外内存
+                //这步的意义就是将非对外内存转化为
+                // 堆外内存
+                //filterOutboundMessage 方法方法最终会调用 AbstractNioByteChannel 中的 filterOutboundMessage 方法：
                 msg = filterOutboundMessage(msg);
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
                     size = 0;
                 }
             } catch (Throwable t) {
+                //这
+                // 里的逻辑之前剖析过, 这里我们首先关注两个部分, 首先看在 catch 中 safeSetFailure 这步。因为是 catch 块, 说明发
+                //生了异常, 写到缓冲区不成功, safeSetFailure 就是设置写出失败的状态。我们跟到 safeSetFailure 方法中：
                 safeSetFailure(promise, t);
                 ReferenceCountUtil.release(msg);
                 return;
             }
+            // 插入写队列
+            // 将已经转化为堆外内存的 msg 插入到写队列。我们跟到 addMessage()方法当中, 这是 ChannelOutboundBuffer 中的
 
+            //回到 AbstractUnsafe 的 write 方法，我们再关注这一步：outboundBuffer.addMessage(msg, size, promise);
+            // 跟到 addMessage()方法中：
             outboundBuffer.addMessage(msg, size, promise);
         }
 
         @Override
         public final void flush() {
             assertEventLoop();
-
+            //这
+            // 里首先也是拿到 ChannelOutboundBuffer 对象，然后我们看这一步：
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 return;
             }
-
+            //这一步同样也是调整 ChannelOutboundBuffer 的指针   跟进 addFlush 方法：
             outboundBuffer.addFlush();
+            //这
+            // 块逻辑之前已分析过, 继续看 flush0 方法：
             flush0();
         }
 
@@ -861,6 +877,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             try {
+                //篇
+                // 幅原因我们省略大段代码，我们继续跟进 doWrite 方法：
                 doWrite(outboundBuffer);
             } catch (Throwable t) {
                 if (t instanceof IOException && config().isAutoClose()) {
@@ -911,6 +929,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
          * Marks the specified {@code promise} as failure.  If the {@code promise} is done already, log a message.
          */
         protected final void safeSetFailure(ChannelPromise promise, Throwable cause) {
+            //这
+            // 里看 if 判断, 首先我们的 promise 是 DefaultChannelPromise, 所以!(promise instanceof VoidChannelPromise)为
+            // true。重点分析 promise.tryFailure(cause), 这里是设置失败状态, 这里会调用 DefaultPromise 的 tryFailure 方法，跟进
+            // tryFailure 方法
             if (!(promise instanceof VoidChannelPromise) && !promise.tryFailure(cause)) {
                 logger.warn("Failed to mark a promise as failure because it's done already: {}", promise, cause);
             }

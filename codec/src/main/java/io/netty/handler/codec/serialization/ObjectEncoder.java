@@ -34,22 +34,30 @@ import java.io.Serializable;
  * interoperability with this encoder.
  */
 @Sharable
+//如果要使用 Java 序列化，对象必须实现 Serializable 接口，因此，它的泛型类型为 Serializable
 public class ObjectEncoder extends MessageToByteEncoder<Serializable> {
     private static final byte[] LENGTH_PLACEHOLDER = new byte[4];
 
     @Override
     protected void encode(ChannelHandlerContext ctx, Serializable msg, ByteBuf out) throws Exception {
         int startIdx = out.writerIndex();
-
+        //首先创建 ByteBufOutputStream 和 ObjectOutputStream，用于将 Object 对象序列化到 ByteBuf 中，值得注意的是在
+        // writeObject 之前需要先将长度字段（4 个字节）预留，用于后续长度字段的更新。
         ByteBufOutputStream bout = new ByteBufOutputStream(out);
+        //依次写入长度占位符（4 字节）、序列化之后的 Object 对象
         bout.write(LENGTH_PLACEHOLDER);
         ObjectOutputStream oout = new CompactObjectOutputStream(bout);
+        //序列化之后的 Object 对象
         oout.writeObject(msg);
         oout.flush();
         oout.close();
-
+        //之后根据 ByteBuf 的 writeIndex 计算序列化之后的码流
+        // 长度
         int endIdx = out.writerIndex();
-
+        //最后调用 ByteBuf 的 setInt(int index, int value)更新长度占位符为实际的码流长度。
         out.setInt(startIdx, endIdx - startIdx - 4);
+
+    //    有个细节需要注意，更新码流长度字段使用了 setInt 方法而不是 writeInt，原因就是 setInt 方法只更新内容，并不修改
+        // readerIndex 和 writerIndex。
     }
 }

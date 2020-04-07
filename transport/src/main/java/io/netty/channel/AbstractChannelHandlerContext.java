@@ -370,8 +370,10 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     static void invokeChannelRead(final AbstractChannelHandlerContext next, Object msg) {
         final Object m = next.pipeline.touch(ObjectUtil.checkNotNull(msg, "msg"), next);
+        //// 从context中拿到EventLoop，目的是检测是否是发动机线程在执行
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
+            //// 执行context的invokeChannelRead方法
             next.invokeChannelRead(m);
         } else {
             executor.execute(new Runnable() {
@@ -384,13 +386,19 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     private void invokeChannelRead(Object msg) {
+        //// 在Context被添加到pipeline后会设置一个context被添加完成的标志位
+        //   // 这里确保context被添加完成，才会开始事件的执行，不然就往下继续传播
+        //   // 也可以不在乎顺序，像Tail、Head这类Context就不在乎顺序，正在被添加也可以执行事件
+        //   // 在一般的context中都是在乎顺序的，需要在context完全添加完成才可以执行事件
         if (invokeHandler()) {
             try {
+                // // 执行对应的事件
                 ((ChannelInboundHandler) handler()).channelRead(this, msg);
             } catch (Throwable t) {
                 notifyHandlerException(t);
             }
         } else {
+            //// 否则往下传播
             fireChannelRead(msg);
         }
     }
@@ -777,6 +785,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     private void invokeWrite0(Object msg, ChannelPromise promise) {
         try {
+            //调用当前 handler 的 wirte()方法
+
+            // 该
+            // 方法我们在 pipeline 中已经进行过分析, 就是调用当前 handler 的 write 方法, 如果当前 handler 中 write 方法是继续
+            // 往下传播, 在会继续传播写事件, 直到传播到 head 节点, 最后会走到 HeadContext 的 write 方法中，跟到 HeadContext
+            // 的 write 方法中：
             ((ChannelOutboundHandler) handler()).write(this, msg, promise);
         } catch (Throwable t) {
             notifyOutboundHandlerException(t, promise);
@@ -822,6 +836,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     @Override
+    //这里的逻辑也不陌生, 注意这里最后返回了 promise, 其实就是我们上一步创建 DefaultChannelPromise 对象，
+    // DefaultChannelPromise 实现了 ChannelFuture 接口, 所以方法如果返回该对象可以被 ChannelFuture 类型接收。我们
+    // 继续跟 write 方法：
     public ChannelFuture writeAndFlush(Object msg, ChannelPromise promise) {
         if (msg == null) {
             throw new NullPointerException("msg");
@@ -832,7 +849,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
             // cancelled
             return promise;
         }
-
+        //我们继续跟 write 方法：
         write(msg, true, promise);
 
         return promise;
@@ -840,24 +857,52 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     private void invokeWriteAndFlush(Object msg, ChannelPromise promise) {
         if (invokeHandler()) {
+            //写入
             invokeWrite0(msg, promise);
+            //刷新
+
+            //我们刚才分析了 write 操作中 promise 的传递以及状态设置的大概过程, 我们继续看在 flush 中 promise 的操作过程
+            //这里 invokeFlush0()并没有传入 promise 对象, 是因为我们刚才分析过, promise 对象会绑定在缓冲区中 entry 的成员变
+            // 量中, 可以通过其成员变量拿到 promise 对象
             invokeFlush0();
         } else {
             writeAndFlush(msg, promise);
         }
     }
-
+    //这
+    // 里的逻辑我们也不陌生, 找到下一个节点, 因为 writeAndFlush 是从 tail 节点开始的, 并且是 outBound 的事件, 所以
+    // 这里会找到 tail 节点的上一个 outBoundHandler, 有可能是编码器, 也有可能是我们业务处理的 handler。if
+    // (executor.inEventLoop()) 判断是否是 eventLoop 线程, 如果不是, 则封装成 task 通过 nioEventLoop 异步执行, 我们这
+    // 里先按照是 eventLoop 线程分析。首先, 这里通过 flush 判断是否调用了 flush, 这里显然是 true, 因为我们调用的方法
+    // 是 writeAndFlush()方法，我们跟到 invokeWriteAndFlush 中：
     private void write(Object msg, boolean flush, ChannelPromise promise) {
+        //findContextOutbound()寻找前一个 outbound 节点
+        //最后到 head 节点结束
+
+        //因为 writeAndFlush 是从 tail 节点开始的, 并且是 outBound 的事件, 所以
+        //     // 这里会找到 tail 节点的上一个 outBoundHandler, 有可能是编码器, 也有可能是我们业务处理的 handler。
         AbstractChannelHandlerContext next = findContextOutbound();
         final Object m = pipeline.touch(msg, next);
         EventExecutor executor = next.executor();
+        //判断是否是 eventLoop 线程,
         if (executor.inEventLoop()) {
+            //我们这
+            //     // 里先按照是 eventLoop 线程分析。首先, 这里通过 flush 判断是否调用了 flush,
             if (flush) {
+                // 这里显然是 true, 因为我们调用的方法
+                //     // 是 writeAndFlush()方法，我们跟到 invokeWriteAndFlush 中：
                 next.invokeWriteAndFlush(m, promise);
             } else {
+                //没有调 flush
                 next.invokeWrite(m, promise);
             }
         } else {
+            //这里 的 逻 辑 我 们 同 样 不 陌 生 , 如 果 nioEventLoop 线 程 , 我 们 继 续 调 invokeWriteAndFlush 方 法 , 如 果 不 是
+            // nioEventLoop 线程则将 writeAndFlush 事件封装成 task, 交给 eventLoop 线程异步。这里如果是异步执行, 则到这一
+            // 步之后, 我们的业务代码中, writeAndFlush 就会返回并添加监听, 有关添加监听的逻辑稍后分析。走到这里, 无论同步
+            // 异步, 都会执行到 invokeWriteAndFlush 方法：
+
+            // 如果不是, 则封装成 task 通过 nioEventLoop 异步执行,
             AbstractWriteTask task;
             if (flush) {
                 task = WriteAndFlushTask.newInstance(next, m, promise);
@@ -870,6 +915,8 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     @Override
     public ChannelFuture writeAndFlush(Object msg) {
+        //回到
+        // writeAndFlush()方法继续跟：
         return writeAndFlush(msg, newPromise());
     }
 
@@ -914,6 +961,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     @Override
     public ChannelPromise newPromise() {
+        //这
+        // 里直接创建了 DefaultChannelPromise 这个对象并传入了当前 channel 和当前 channel 绑定 NioEventLoop 对象。
+        // 在 DefaultChannelPromise 构造方法中, 也会将 channel 和 NioEventLoop 对象绑定在自身成员变量中。
         return new DefaultChannelPromise(channel(), executor());
     }
 
@@ -976,7 +1026,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private AbstractChannelHandlerContext findContextInbound() {
         AbstractChannelHandlerContext ctx = this;
         do {
+             // 一直往下找
             ctx = ctx.next;
+            // 直到找到一个Inbound类型的Context
         } while (!ctx.inbound);
         return ctx;
     }

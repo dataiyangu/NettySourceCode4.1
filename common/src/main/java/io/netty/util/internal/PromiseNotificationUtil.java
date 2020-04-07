@@ -45,6 +45,7 @@ public final class PromiseNotificationUtil {
      * Try to mark the {@link Promise} as success and log if {@code logger} is not {@code null} in case this fails.
      */
     public static <V> void trySuccess(Promise<? super V> p, V result, InternalLogger logger) {
+        //里再继续跟 if 中的 trySuccess 方法, 最后会走到 DefaultPromise 的 trySuccess 方法：
         if (!p.trySuccess(result) && logger != null) {
             Throwable err = p.cause();
             if (err == null) {

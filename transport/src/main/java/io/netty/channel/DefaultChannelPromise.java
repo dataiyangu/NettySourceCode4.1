@@ -90,6 +90,8 @@ public class DefaultChannelPromise extends DefaultPromise<Void> implements Chann
     }
 
     @Override
+    //我们看 addListener 这个方法，addListener 传入 ChannelFutureListener 对象, 并重写了
+    // operationComplete 方法, 也就是执行回调的方法，会执行到 DefaultChannelPromise 的 addListener 方法, 跟进去
     public ChannelPromise addListener(GenericFutureListener<? extends Future<? super Void>> listener) {
         super.addListener(listener);
         return this;

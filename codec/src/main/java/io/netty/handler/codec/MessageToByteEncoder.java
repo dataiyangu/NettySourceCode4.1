@@ -99,24 +99,36 @@ public abstract class MessageToByteEncoder<I> extends ChannelOutboundHandlerAdap
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         ByteBuf buf = null;
         try {
+            //首先判断当前编码器是否支持需要发送的消息
             if (acceptOutboundMessage(msg)) {
+                //如果
+                // 支持则判断缓冲区的类型
+                //对于直接内存分配 ioBuffer（堆外内存），对于堆内存通过 heapBuffer 方法分配
                 @SuppressWarnings("unchecked")
                 I cast = (I) msg;
                 buf = allocateBuffer(ctx, cast, preferDirect);
                 try {
+                    //编码使用的缓冲区分配完成之后，调用 encode 抽象方法进行编码，方法定义如下：它由子类负责具体实现。
                     encode(ctx, cast, buf);
                 } finally {
+                    //编码完成之后，调用 ReferenceCountUtil 的 release 方法释放编码对象 msg。
                     ReferenceCountUtil.release(cast);
                 }
-
+                //对编码后的 ByteBuf 进行以下判断：
+                //如果缓冲区包含可发送的字节，则调用 ChannelHandlerContext 的 write 方法发送 ByteBuf；
                 if (buf.isReadable()) {
                     ctx.write(buf, promise);
                 } else {
+                    //如果缓冲区没有包含可写的字节，则需要释放编码后的 ByteBuf，写入一个空的 ByteBuf 到 ChannelHandlerContext
+                    // 中。
                     buf.release();
                     ctx.write(Unpooled.EMPTY_BUFFER, promise);
                 }
+                //发送操作完成之后，在方法退出之前释放编码缓冲区 ByteBuf 对象。
                 buf = null;
             } else {
+                //如果不支持则直接透传
+                //透传：没有改变任何的结构和数据
                 ctx.write(msg, promise);
             }
         } catch (EncoderException e) {

@@ -148,7 +148,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
                     allocHandle.incMessagesRead(1);
                     readPending = false;
-                    //读取完毕之后, 会通过 pipeline.fireChannelRead(byteBuf)将传递 channelRead 事件, 有关 channelRead
+                    //一次读取完毕之后, 会通过 pipeline.fireChannelRead(byteBuf)将传递 channelRead 事件, 有关 channelRead
                     // 事件, 我们在前面的章节也进行了详细的剖析
                     pipeline.fireChannelRead(byteBuf);
                     byteBuf = null;
@@ -255,6 +255,10 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 }
 
                 if (done) {
+                    ////代码省略
+                    //这
+                    // 里也省略了大段代码, 我们重点关注 in.remove()这里, 之前介绍过, 如果 done 为 true, 说明刷新事件已完成, 则移
+                    // 除当前 entry 节点，我们跟到 remove()方法中
                     in.remove();
                 } else {
                     // Break the loop and so incompleteWrite(...) is called.
@@ -270,12 +274,17 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
     @Override
     protected final Object filterOutboundMessage(Object msg) {
+        //首
+        // 先判断 msg 是否 byteBuf 对象,
         if (msg instanceof ByteBuf) {
             ByteBuf buf = (ByteBuf) msg;
+            //是堆外内存, 直接返回
+            //如果是, 判断是否堆外内存
             if (buf.isDirect()) {
+                //如果是堆外内存, 则直接返回,
                 return msg;
             }
-
+            // 否则, 通过newDirectBuffer(buf)这种方式转化为堆外内存
             return newDirectBuffer(buf);
         }
 

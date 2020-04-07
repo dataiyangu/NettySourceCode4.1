@@ -108,6 +108,8 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     @Override
     public boolean trySuccess(V result) {
         if (setSuccess0(result)) {
+            //设
+            // 置完成功状态之后, 则会通过 notifyListeners()执行监听中的回调。我们看用户代码
             notifyListeners();
             return true;
         }
@@ -125,7 +127,13 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
 
     @Override
     public boolean tryFailure(Throwable cause) {
+        //跟进setFailure0
         if (setFailure0(cause)) {
+            //我们关注 notifyListeners()这个方法, 这个方法是执行添加监听的回调函数, 当 writeAndFlush 和
+            // addListener 是异步执行的时候, 这里有可能添加已经添加, 所以通过这个方法可以调用添加监听后的回调。如果
+            // writeAndFlush 和 addListener 是同步执行的时候, 也就是都在 NioEventLoop 线程中执行的时候, 那么走到这里
+            // addListener 还没执行, 所以这里不能回调添加监听的回调函数, 那么回调是什么时候执行的呢?我们在剖析
+            // addListener 步骤的时候会给大家分析
             notifyListeners();
             return true;
         }
@@ -142,6 +150,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     }
 
     @Override
+    //我
+    // 们看到首先会拿到result对象, 然后判断result不为空, 并且不是UNCANCELLABLE, 并且不属于CauseHolder对象.
+    // 我们刚才分析如果promise设置为成功装载, 则result为SUCCESS, 所以这里条件成立,
     public boolean isSuccess() {
         Object result = this.result;
         return result != null && result != UNCANCELLABLE && !(result instanceof CauseHolder);
@@ -159,13 +170,27 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     }
 
     @Override
+    //这
+    // 里通过 addListener0 方法添加 listener, 因为添加 listener 有可能会在不同的线程中操作, 比如用户线程和
+    // NioEventLoop 线程, 为了防止并发问题, 这里简单粗暴的加了个 synchronized 关键字。跟到 addListener0 方法中：
     public Promise<V> addListener(GenericFutureListener<? extends Future<? super V>> listener) {
         checkNotNull(listener, "listener");
 
         synchronized (this) {
+            // addListener0 方法添加 listener
+            //因为添加 listener 有可能会在不同的线程中操作  比如用户线程和
+            //NioEventLoop 线程, 为了防止并发问题, 这里简单粗暴的加了个 synchronized 关键字。跟到 addListener0 方法中：
             addListener0(listener);
         }
 
+        //这
+        // 里判断 result 不为 null 并且不为 UNCANCELLABLE, 则就表示完成。因为成功的状态是 SUCCESS, 所以 flush 成功
+        // 这里会返回 true
+        //这也解释刚才的问题, 在
+        // 同步操作中, writeAndFlush 在执行回调时并没有添加 listener, 所以添加 listener 的时候会判断 writeAndFlush 的执行状
+        //     //态, 如果状态时完成, 则会这里执行回调。同样, 在异步操作中, 走到这里 writeAndFlush 可能还没完成, 所以这里不会
+        //     // 执行回调, 由 writeAndFlush 执行回调。所以, 无论 writeAndFlush 和 addListener 谁先完成, 都可以执行到回调方法。
+        //     // 跟到 notifyListeners()方法中
         if (isDone()) {
             notifyListeners();
         }
@@ -415,9 +440,12 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         checkNotNull(listener, "listener");
         notifyListenerWithStackOverFlowProtection(eventExecutor, future, listener);
     }
-
+    //这
+    // 里首先判断是否是 eventLoop 线程, 如果是 eventLoop 线程则执行 if 块中的逻辑, 如果不是 eventLoop 线程, 则把
+    // 执行回调的逻辑封装成 task 丢到 EventLoop 的任务队列中异步执行。我们重点关注 notifyListenersNow()方法, 跟进去
     private void notifyListeners() {
         EventExecutor executor = executor();
+        //如果是 eventLoop 线程则执行 if 块中的逻辑
         if (executor.inEventLoop()) {
             final InternalThreadLocalMap threadLocals = InternalThreadLocalMap.get();
             final int stackDepth = threadLocals.futureListenerStackDepth();
@@ -431,7 +459,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
                 return;
             }
         }
-
+        //如果不是 eventLoop 线程, 则把
+        //     // 执行回调的逻辑封装成 task 丢到 EventLoop 的任务队列中异步执行。我们重点关注 notifyListenersNow()方法, 跟进去
+        //
         safeExecute(executor, new Runnable() {
             @Override
             public void run() {
@@ -481,12 +511,18 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
             listeners = this.listeners;
             this.listeners = null;
         }
+        ////在
+        //     // 无限 for 循环中,
         for (;;) {
             if (listeners instanceof DefaultFutureListeners) {
                 notifyListeners0((DefaultFutureListeners) listeners);
             } else {
+                //首先首先判断 listeners 是不是 DefaultFutureListeners 类型, 根据我们之前的逻辑, 如果只添加了一
+                //         //     // 个 listener, 则 listeners 是 GenericFutureListener 类型。通常在添加的时候只会添加一个 listener, 所以我们跟到 else
+                //         //     // 块中的 notifyListener0 方法：
                 notifyListener0(this, (GenericFutureListener<? extends Future<V>>) listeners);
             }
+            // /代码省略
             synchronized (this) {
                 if (this.listeners == null) {
                     // Nothing can throw from within this method, so setting notifyingListeners back to false does not
@@ -509,6 +545,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
+    //我
+    // 们看到, 这里执行了 GenericFutureListener 的中我们重写的回调函数 operationComplete。以上就是执行回调的相
+    // 关逻辑。
     private static void notifyListener0(Future future, GenericFutureListener l) {
         try {
             l.operationComplete(future);
@@ -516,13 +555,36 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
             logger.warn("An exception was thrown by " + l.getClass().getName() + ".operationComplete()", t);
         }
     }
-
+    //如
+    // 果是第一次添加 listener, 则成员变量 listeners 为 null, 这样就把参数传入的 GenericFutureListener 赋值到成员变量
+    // listeners 。 如 果 是 第 二 次 添 加 listener, listeners 不 为 空 , 会 走 到 else if 判 断 , 因 为 第 一 次 添 加 的 listener 是
+    // GenericFutureListener 类型, 并不是 DefaultFutureListeners 类型, 所以 else if 判断返回 false, 进入到 else 块中。else
+    // 块中, 通过 new 的方式创建一个 DefaultFutureListeners 对象并赋值到成员变量 listeners 中。DefaultFutureListeners
+    // 的构造方法中, 第一个参数传入 DefaultPromise 中的成员变量 listeners, 也就是第一次添加的 GenericFutureListener
+    // 对象, 第二个参数为第二次添加的 GenericFutureListener 对象, 这里通过两个 GenericFutureListener 对象包装成一个
+    // DefaultFutureListeners 对象。我们看 listeners 的定义：
     private void addListener0(GenericFutureListener<? extends Future<? super V>> listener) {
         if (listeners == null) {
+            //如果是第一次添加 listener, 则成员变量 listeners 为 null, 这样就把参数传入的 GenericFutureListener 赋值到成员变量
+            // listeners 。
             listeners = listener;
         } else if (listeners instanceof DefaultFutureListeners) {
+
+            //经
+            // 过两次添加 listener, 属性 listeners 的值就变成了 DefaultFutureListeners 类型的对象, 如果第三次添加 listener, 则会
+            // 走到 else if 块中, DefaultFutureListeners 对象通过调用 add 方法继续添加 listener。跟到 add 方法中：
             ((DefaultFutureListeners) listeners).add(listener);
         } else {
+            //如 果 是 第 二 次 添 加 listener, listeners 不 为 空 , 会 走 到 else if 判 断 , 因 为 第 一 次 添 加 的 listener 是
+            //     // GenericFutureListener 类型, 并不是 DefaultFutureListeners 类型, 所以 else if 判断返回 false, 进入到 else 块中。else
+            //     // 块中, 通过 new 的方式创建一个 DefaultFutureListeners 对象并赋值到成员变量 listeners 中
+
+            //DefaultFutureListeners
+            //     // 的构造方法中, 第一个参数传入 DefaultPromise 中的成员变量 listeners, 也就是第一次添加的 GenericFutureListener
+            //     // 对象, 第二个参数为第二次添加的 GenericFutureListener 对象, 这里通过两个 GenericFutureListener 对象包装成一个
+            //     // DefaultFutureListeners 对象。我们看 listeners 的定义：
+
+            // 这里是个 Object 类型, 所以可以保存任何类型的对象。再看 DefaultFutureListeners 的构造方法：
             listeners = new DefaultFutureListeners((GenericFutureListener<? extends Future<V>>) listeners, listener);
         }
     }
@@ -542,7 +604,17 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     private boolean setFailure0(Throwable cause) {
         return setValue0(new CauseHolder(checkNotNull(cause, "cause")));
     }
+    //这
+    // 里在 if 块中的 cas 操作, 会将参数 objResult 的值设置到 DefaultPromise 的成员变量 result 中, 表示当前操作为异常
+    // 状态
 
+    //回到 tryFailure 方法
+
+    //同
+    // 样, 在 if 判断中, 通过 cas 操作将参数传入的 SUCCESS 对象赋值到 DefaultPromise 的属性 result 中, 我们看这个属
+    // 性: private volatile Object result; 这里是 Object 类型, 也就是可以赋值成任何类型。SUCCESS 是一个 Signal 类型的对
+    // 象, 这里我们可以简单理解成一种状态, SUCCESS 表示一种成功的状态。通过上述 cas 操作, result 的值将赋值成
+    // SUCCESS，我们回到 trySuccess 方法：
     private boolean setValue0(Object objResult) {
         if (RESULT_UPDATER.compareAndSet(this, null, objResult) ||
             RESULT_UPDATER.compareAndSet(this, UNCANCELLABLE, objResult)) {
@@ -750,7 +822,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     private static boolean isCancelled0(Object result) {
         return result instanceof CauseHolder && ((CauseHolder) result).cause instanceof CancellationException;
     }
-
+    //这
+    // 里判断 result 不为 null 并且不为 UNCANCELLABLE, 则就表示完成。因为成功的状态是 SUCCESS, 所以 flush 成功
+    // 这里会返回 true。回到 addListener 中，如果执行完成, 就通过 notifyListeners()方法执行回调,
     private static boolean isDone0(Object result) {
         return result != null && result != UNCANCELLABLE;
     }

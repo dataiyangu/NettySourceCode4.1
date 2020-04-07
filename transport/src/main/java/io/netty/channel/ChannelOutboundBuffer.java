@@ -113,8 +113,28 @@ public final class ChannelOutboundBuffer {
      * the message was written.
      */
     public void addMessage(Object msg, int size, ChannelPromise promise) {
+        //首
+        // 先通过 Entry.newInstance(msg, size, total(msg), promise) 的方式将 msg 封装成 entry
+
+        //我
+        // 们只需要关注包装 Entry 的 newInstance 方法, 该方法传入 promise 对象，跟到 newInstance 中：
         Entry entry = Entry.newInstance(msg, size, total(msg), promise);
+        //然后通过调整 tailEntry,
+        // flushedEntry, unflushedEntry 三个指针, 完成 entry 的添加
+        //这三个指针均是 ChannelOutboundBuffer 的成员变量
+
+        //flushedEntry 指向第一个被 flush 的 entry
+        // unflushedEntry 指向第一个未被 flush 的 entry
+        //也就是说, 从 flushedEntry 到 unflushedEntry 之间的 entry,都是被已经被 flush 的 entry
+        //tailEntry 指向最后一个 entry,
+        // 也就是从 unflushedEntry 到 tailEntry 之间的 entry 都是没 flush 的 entry
+
+        //创建了 entry 之后首先判
+        // 断尾指针是否为空,
         if (tailEntry == null) {
+            //在第一次添加的时候, 均是空,
+            //所以会将 flushedEntry 设置为 null, 并且将尾指针设置为当前创建
+            // 的 entry，
             flushedEntry = null;
             tailEntry = entry;
         } else {
@@ -122,35 +142,63 @@ public final class ChannelOutboundBuffer {
             tail.next = entry;
             tailEntry = entry;
         }
+        // 最后判断 unflushedEntry 是否为空, 如果第一次添加这里也是空, 所以这里将 unflushedEntry 设置为新创建
+        // 的 entry。
         if (unflushedEntry == null) {
             unflushedEntry = entry;
         }
 
         // increment pending bytes after adding message to the unflushed arrays.
         // See https://github.com/netty/netty/issues/1619
+        //回 到 代 码 中 , 看 这 一 步
+        // incrementPendingOutboundBytes(size, false)，这步时统计当前有多少字节需要被写出, 我们跟到这个方法中
         incrementPendingOutboundBytes(size, false);
+
+    //    如果不是第一次调用 write 方法, 则会进入 if (tailEntry == null) 中 else 块:
+        // Entry tail = tailEntry 这里 tail 就是当前尾节点
+        // tail.next = entry 代表尾节点的下一个节点指向新创建的 entry
+        // tailEntry = entry 将尾节点也指向 entry
+        // 这样就完成了添加操作, 其实就是将新创建的节点追加到原来尾节点之后，第二次添加 if (unflushedEntry == null) 会
+        // 返回 false, 所以不会进入 if 块。第二次添加之后指针的指向情况如下图所示：
+
+
+    //    回 到 代 码 中 , 看 这 一 步
+        // incrementPendingOutboundBytes(size, false)，这步时统计当前有多少字节需要被写出, 我们跟到这个方法中：
     }
 
     /**
      * Add a flush to this {@link ChannelOutboundBuffer}. This means all previous added messages are marked as flushed
      * and so you will be able to handle them.
      */
+    //首
+    // 先声明一个 entry 指向 unflushedEntry, 也就是第一个未 flush 的 entry。通常情况下 unflushedEntry 是不为空的, 所
+    // 以进入 if，再未刷新前 flushedEntry 通常为空, 所以会执行到 flushedEntry = entry，也就是 flushedEntry 指向 entry。
+    // 经过上述操作, 缓冲区的指针情况如图所示：
     public void addFlush() {
         // There is no need to process all entries if there was already a flush before and no new messages
         // where added in the meantime.
         //
         // See https://github.com/netty/netty/issues/2577
+        //首
+        // 先声明一个 entry 指向 unflushedEntry,也就是第一个未 flush 的 entry。
         Entry entry = unflushedEntry;
         if (entry != null) {
             if (flushedEntry == null) {
+                //通常情况下 unflushedEntry 是不为空的, 所
+                // 以进入 if，再未刷新前 flushedEntry 通常为空, 所以会执行到 flushedEntry = entry，也就是 flushedEntry 指向 entry。
                 // there is no flushedEntry yet, so start with the entry
                 flushedEntry = entry;
             }
             do {
+                //然后通过 do-while 将, 不断寻找 unflushedEntry 后面的节点, 直到没有节点为止，
+                // flushed 自增代表需要刷新多少个节点。
                 flushed ++;
                 if (!entry.promise.setUncancellable()) {
                     // Was cancelled so make sure we free up memory and notify about the freed bytes
                     int pending = entry.cancel();
+                    //循环中我们关注这一步
+                    //这一步也是统计缓冲区中的字节数, 但是是和上一小节的 incrementPendingOutboundBytes 正好是相反, 因为这里是
+                    // 刷新, 所以这里要减掉刷新后的字节数，我们跟到方法中：
                     decrementPendingOutboundBytes(pending, false, true);
                 }
                 entry = entry.next;
@@ -173,8 +221,14 @@ public final class ChannelOutboundBuffer {
         if (size == 0) {
             return;
         }
-
+        //当前缓冲区里面有多少待写的字节
+        //表示当前缓冲区还有多少待写的字节, addAndGet 就是将当前的 ByteBuf 的长度进
+        // 行 累 加 , 累 加 到 newWriteBufferSize 中 。
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, size);
+        ////getWriteBufferHighWaterMark() 最高不能超过 64k
+        // 表示写 buffer
+        // 的 高 水 位 值 , 默 认 是 64KB, 也 就 是 说 写 buffer 的 最 大 长 度 不 能 超 过 64KB 。 如 果 超 过 了 64KB, 则 会 调 用
+        // setUnwritable(invokeLater)方法设置写状态，我们跟到 setUnwritable(invokeLater)方法中
         if (newWriteBufferSize > channel.config().getWriteBufferHighWaterMark()) {
             setUnwritable(invokeLater);
         }
@@ -192,9 +246,17 @@ public final class ChannelOutboundBuffer {
         if (size == 0) {
             return;
         }
-
+        // /从总的大小减去
+        //同
+        // 样 TOTAL_PENDING_SIZE_UPDATER 代表缓冲区的字节数, 这里的 addAndGet 中参数是-size, 也就是减掉 size 的长度。
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, -size);
+        ////直到减到小于某一个阈值 32 个字节
+        //再看 if (notifyWritability && newWriteBufferSize < channel.config().getWriteBufferLowWaterMark()) 。
+        // getWriteBufferLowWaterMark()代表写 buffer 的第水位值, 也就是 32k
         if (notifyWritability && newWriteBufferSize < channel.config().getWriteBufferLowWaterMark()) {
+            // 设置写状态
+            //如果写 buffer 的长度小于这个数, 就通过
+            // setWritable 方法设置写状态，也就是通道由原来的不可写改成可写
             setWritable(invokeLater);
         }
     }
@@ -250,7 +312,10 @@ public final class ChannelOutboundBuffer {
             return false;
         }
         Object msg = e.msg;
-
+        //这
+        // 里我们看这一步:
+        // 之前我们剖析过 promise 对象会绑定在 entry 中, 而这步就是从 entry 中获取 promise 对象，等 remove 操作完成, 会
+        //执行到这一步：
         ChannelPromise promise = e.promise;
         int size = e.pendingSize;
 
@@ -259,6 +324,7 @@ public final class ChannelOutboundBuffer {
         if (!e.cancelled) {
             // only release message, notify and decrement if it was not canceled before.
             ReferenceCountUtil.safeRelease(msg);
+            //这一步正好和我们刚才分析的 safeSetFailure 相反, 这里是设置成功状态，跟到 safeSuccess 方法中：
             safeSuccess(promise);
             decrementPendingOutboundBytes(size, false, true);
         }
@@ -558,7 +624,9 @@ public final class ChannelOutboundBuffer {
             }
         }
     }
-
+    //这
+    // 里 通 过 自 旋 和 cas 操 作 , 传 播 一 个 ChannelWritabilityChanged 事 件 , 最 终 会 调 用 handler 的
+    // channelWritabilityChanged 方法进行处理，以上就是写 buffer 的相关逻辑。
     private void setUnwritable(boolean invokeLater) {
         for (;;) {
             final int oldValue = unwritable;
@@ -670,6 +738,8 @@ public final class ChannelOutboundBuffer {
 
     private static void safeSuccess(ChannelPromise promise) {
         if (!(promise instanceof VoidChannelPromise)) {
+            //再
+            // 跟到 trySuccess 方法中：
             PromiseNotificationUtil.trySuccess(promise, null, logger);
         }
     }
@@ -780,6 +850,9 @@ public final class ChannelOutboundBuffer {
             this.handle = handle;
         }
 
+        //这
+        // 里将 promise 设置到 Entry 的成员变量中了, 也就是说, 每个 Entry 都关联了唯一的一个 promise，我们回到
+        // AbstractChannelHandlerContext 的 invokeWriteAndFlush 方法中：
         static Entry newInstance(Object msg, int size, long total, ChannelPromise promise) {
             Entry entry = RECYCLER.get();
             entry.msg = msg;

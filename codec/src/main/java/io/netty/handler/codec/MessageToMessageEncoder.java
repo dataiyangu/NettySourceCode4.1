@@ -78,8 +78,11 @@ public abstract class MessageToMessageEncoder<I> extends ChannelOutboundHandlerA
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        //创建 CodecOutputList 对象
         CodecOutputList out = null;
         try {
+            //判断当前需要编码的对象是否是编码器可处理的类型，如果
+            // 不是，则忽略，执行下一个 ChannelHandler 的 write 方法。
             if (acceptOutboundMessage(msg)) {
                 out = CodecOutputList.newInstance();
                 @SuppressWarnings("unchecked")
@@ -89,7 +92,8 @@ public abstract class MessageToMessageEncoder<I> extends ChannelOutboundHandlerA
                 } finally {
                     ReferenceCountUtil.release(cast);
                 }
-
+                //如果编码后的 CodecOutputList 为空，说明编码没有成功，释放
+                // CodecOutputList 引用。
                 if (out.isEmpty()) {
                     out.recycle();
                     out = null;
@@ -98,6 +102,7 @@ public abstract class MessageToMessageEncoder<I> extends ChannelOutboundHandlerA
                             StringUtil.simpleClassName(this) + " must produce at least one message.");
                 }
             } else {
+                // 不是，则忽略，执行下一个 ChannelHandler 的 write 方法。
                 ctx.write(msg, promise);
             }
         } catch (EncoderException e) {
@@ -114,6 +119,7 @@ public abstract class MessageToMessageEncoder<I> extends ChannelOutboundHandlerA
                     // See https://github.com/netty/netty/issues/2525
                     ChannelPromise voidPromise = ctx.voidPromise();
                     boolean isVoidPromise = promise == voidPromise;
+                    // 不是，则忽略，执行下一个 ChannelHandler 的 write 方法。
                     for (int i = 0; i < sizeMinusOne; i ++) {
                         ChannelPromise p;
                         if (isVoidPromise) {
