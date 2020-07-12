@@ -757,7 +757,9 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             throw new NullPointerException("task");
         }
 
-        //当前这个线程是不是和当的Executor关联的线程
+        //当前这个线程是不是和当的Executor关联的线程 //不是说明是netty的主线程
+        //不设置线程的话，默认handler都用channel关联的哪个eventloop
+        //单独设置的话，就是自己的eventLoop
         boolean inEventLoop = inEventLoop();
         if (inEventLoop) {
             //是在eventLoop中的就直接添加到队列中
